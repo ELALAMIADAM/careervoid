@@ -199,14 +199,6 @@ CareerPathConnection.init(
   }
 );
 
-// Set up associations
-CareerPathNode.belongsTo(User, { foreignKey: 'userId', as: 'user' });
-User.hasMany(CareerPathNode, { foreignKey: 'userId', as: 'careerPathNodes' });
-
-CareerPathConnection.belongsTo(CareerPathNode, { foreignKey: 'sourceNodeId', as: 'sourceNode' });
-CareerPathConnection.belongsTo(CareerPathNode, { foreignKey: 'targetNodeId', as: 'targetNode' });
-
-CareerPathNode.hasMany(CareerPathConnection, { foreignKey: 'sourceNodeId', as: 'outgoingConnections' });
-CareerPathNode.hasMany(CareerPathConnection, { foreignKey: 'targetNodeId', as: 'incomingConnections' });
+// Note: Associations are defined in the models/index.ts file to avoid duplication
 
 export { CareerPathNode, CareerPathConnection }; 

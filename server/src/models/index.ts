@@ -49,7 +49,8 @@ export const initDatabase = async () => {
     Application.hasMany(InterviewPrep, { foreignKey: 'applicationId' });
     InterviewPrep.belongsTo(Application, { foreignKey: 'applicationId' });
 
-    // Career path relationships
+    // Career path relationships - fix for duplicate alias issue
+    // Source connections (from this node to others)
     CareerPathNode.hasMany(CareerPathConnection, { 
       foreignKey: 'sourceNodeId', 
       as: 'outgoingConnections',
@@ -60,6 +61,7 @@ export const initDatabase = async () => {
       as: 'sourceNode' 
     });
 
+    // Target connections (from others to this node)
     CareerPathNode.hasMany(CareerPathConnection, { 
       foreignKey: 'targetNodeId', 
       as: 'incomingConnections',
