@@ -225,6 +225,7 @@ export const getUserResumes = async (req: AuthRequest, res: Response) => {
       message: 'Resumes retrieved successfully',
       resumes: resumes.map(resume => ({
         id: resume.id,
+        title: resume.title,
         fileName: resume.fileName,
         fileUrl: resume.fileUrl,
         skills: resume.skills,
@@ -264,6 +265,7 @@ export const getResumeById = async (req: AuthRequest, res: Response) => {
       message: 'Resume retrieved successfully',
       resume: {
         id: resume.id,
+        title: resume.title,
         fileName: resume.fileName,
         fileUrl: resume.fileUrl,
         skills: resume.skills,

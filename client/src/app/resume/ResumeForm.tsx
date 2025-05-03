@@ -63,6 +63,95 @@ interface Language {
   fluency: string; // e.g., "Native", "Fluent", "Intermediate", "Basic"
 }
 
+const SectionHeading = ({ 
+  title, 
+  buttonText, 
+  onButtonClick 
+}: { 
+  title: string; 
+  buttonText?: string; 
+  onButtonClick?: () => void 
+}) => (
+  <div className="flex justify-between items-center mb-4">
+    <h3 className="text-lg font-medium text-gray-900">{title}</h3>
+    {buttonText && onButtonClick && (
+      <button
+        type="button"
+        onClick={onButtonClick}
+        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+      >
+        {buttonText}
+      </button>
+    )}
+  </div>
+);
+
+const FormSectionStatus = ({ 
+  section, 
+  formData 
+}: { 
+  section: string, 
+  formData: any 
+}) => {
+  // Calculate completion percentage for each section
+  const getCompletionStatus = () => {
+    switch(section) {
+      case 'personal':
+        const contactFields = Object.values(formData.contactInfo || {}).filter(Boolean).length;
+        const contactTotal = Object.keys(formData.contactInfo || {}).length;
+        const hasAbout = formData.about?.trim().length > 0;
+        const hasTitle = formData.title?.trim().length > 0;
+        return {
+          completed: hasTitle + hasAbout + contactFields,
+          total: 2 + contactTotal,
+          percentage: Math.round(((hasTitle + hasAbout + contactFields) / (2 + contactTotal)) * 100)
+        };
+      case 'skills':
+        const hasSkills = formData.skills.length > 0;
+        const hasLanguages = formData.languages.length > 0;
+        return {
+          completed: hasSkills + hasLanguages,
+          total: 2,
+          percentage: Math.round(((hasSkills + hasLanguages) / 2) * 100)
+        };
+      case 'experience':
+        return {
+          completed: formData.experience.length,
+          total: formData.experience.length > 0 ? formData.experience.length : 1,
+          percentage: formData.experience.length > 0 ? 100 : 0
+        };
+      case 'education':
+        return {
+          completed: formData.education.length,
+          total: formData.education.length > 0 ? formData.education.length : 1,
+          percentage: formData.education.length > 0 ? 100 : 0
+        };
+      case 'projects':
+        return {
+          completed: formData.projects.length,
+          total: formData.projects.length > 0 ? formData.projects.length : 1,
+          percentage: formData.projects.length > 0 ? 100 : 0
+        };
+      default:
+        return { completed: 0, total: 1, percentage: 0 };
+    }
+  };
+  
+  const status = getCompletionStatus();
+  
+  return (
+    <div className="flex items-center">
+      <div className="w-full bg-gray-200 rounded-full h-1.5 mr-2">
+        <div 
+          className="bg-primary-600 h-1.5 rounded-full" 
+          style={{ width: `${status.percentage}%` }}
+        ></div>
+      </div>
+      <span className="text-xs text-gray-500 whitespace-nowrap">{status.percentage}%</span>
+    </div>
+  );
+};
+
 export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }: ResumeFormProps) {
   const [formData, setFormData] = useState({
     title: '',
@@ -88,6 +177,7 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [currentSection, setCurrentSection] = useState('personal');
+  const [successMessage, setSuccessMessage] = useState('');
   
   useEffect(() => {
     console.log('Current section:', currentSection);
@@ -350,7 +440,12 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Log the form data being submitted
+    console.log('Submitting form data:', formData);
+    
     if (onSubmit) {
+      // When using the parent's submit handler
+      console.log('Using parent submit handler with resumeId:', resumeId);
       onSubmit(formData);
       return;
     }
@@ -360,36 +455,55 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
     
     setLoading(true);
     setError('');
+    setSuccessMessage('');
     
     try {
       let response;
+      const payload = {
+        ...formData,
+        // Convert languages from our format to the API's expected format
+        languages: formData.languages.map(lang => lang.name)
+      };
+      
+      console.log('Sending API payload:', payload);
       
       if (resumeId) {
         // Update existing resume
+        console.log(`Updating resume with ID: ${resumeId}`);
         response = await axios.put(
           `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/resumes/${resumeId}`,
-          formData,
+          payload,
           {
             headers: {
               Authorization: `Bearer ${token}`
             }
           }
         );
+        console.log('Update response:', response.data);
+        setSuccessMessage('Resume updated successfully! All your changes have been saved.');
       } else {
         // Create new resume manually
+        console.log('Creating new resume');
         response = await axios.post(
           `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/resumes/manual`,
-          formData,
+          payload,
           {
             headers: {
               Authorization: `Bearer ${token}`
             }
           }
         );
+        console.log('Create response:', response.data);
+        setSuccessMessage('Resume created successfully! You can now use it to apply for jobs.');
       }
       
-      // Redirect or update UI as needed
-      window.location.reload();
+      // Only reload if the user confirms
+      setTimeout(() => {
+        if (window.confirm('Your resume was saved. Would you like to refresh the page to view all your resumes?')) {
+          window.location.reload();
+        }
+      }, 1500);
+      
     } catch (error: any) {
       console.error('Error saving resume:', error);
       setError(error.response?.data?.message || 'Failed to save resume. Please try again.');
@@ -408,23 +522,33 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
           { id: 'education', name: 'Education' },
           { id: 'projects', name: 'Projects' }
         ].map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setCurrentSection(tab.id)}
-            className={`
-              whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
-              ${currentSection === tab.id
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
-            `}
-          >
-            {tab.name}
-          </button>
+          <div key={tab.id} className="space-y-2 w-32">
+            <button
+              type="button"
+              onClick={() => setCurrentSection(tab.id)}
+              className={`
+                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm w-full text-left
+                ${currentSection === tab.id
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+              `}
+            >
+              {tab.name}
+            </button>
+            <FormSectionStatus section={tab.id} formData={formData} />
+          </div>
         ))}
       </nav>
     </div>
   );
+  
+  useEffect(() => {
+    // Scroll to top of form when changing tabs
+    const formContainer = document.getElementById('resume-form-container');
+    if (formContainer) {
+      formContainer.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [currentSection]);
   
   if (loading && !initialData && !resumeId) {
     return (
@@ -435,7 +559,7 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
   }
   
   return (
-    <div className="bg-white shadow sm:rounded-lg mt-8">
+    <div id="resume-form-container" className="bg-white shadow sm:rounded-lg mt-8 overflow-auto max-h-[80vh]">
       <div className="px-4 py-5 sm:p-6">
         <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
           {resumeId ? 'Edit Resume' : 'Create Resume'}
@@ -462,6 +586,8 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
           <div className="mt-6">
             {currentSection === 'personal' && (
               <div className="space-y-6">
+                <SectionHeading title="Personal Information" />
+                
                 <div>
                   <label htmlFor="title" className="block text-sm font-medium text-gray-700">
                     Resume Title
@@ -497,94 +623,97 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                  <div className="sm:col-span-3">
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                      Email
-                    </label>
-                    <div className="mt-1">
-                      <input
-                        type="email"
-                        id="email"
-                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                        value={formData.contactInfo?.email || ''}
-                        onChange={(e) => handleContactInfoChange('email', e.target.value)}
-                      />
+                <div>
+                  <SectionHeading title="Contact Information" />
+                  <div className="mt-4 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                    <div className="sm:col-span-3">
+                      <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                        Email
+                      </label>
+                      <div className="mt-1">
+                        <input
+                          type="email"
+                          id="email"
+                          className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                          value={formData.contactInfo?.email || ''}
+                          onChange={(e) => handleContactInfoChange('email', e.target.value)}
+                        />
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="sm:col-span-3">
-                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-                      Phone
-                    </label>
-                    <div className="mt-1">
-                      <input
-                        type="text"
-                        id="phone"
-                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                        value={formData.contactInfo?.phone || ''}
-                        onChange={(e) => handleContactInfoChange('phone', e.target.value)}
-                      />
+                    
+                    <div className="sm:col-span-3">
+                      <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+                        Phone
+                      </label>
+                      <div className="mt-1">
+                        <input
+                          type="text"
+                          id="phone"
+                          className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                          value={formData.contactInfo?.phone || ''}
+                          onChange={(e) => handleContactInfoChange('phone', e.target.value)}
+                        />
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="sm:col-span-3">
-                    <label htmlFor="linkedin" className="block text-sm font-medium text-gray-700">
-                      LinkedIn
-                    </label>
-                    <div className="mt-1">
-                      <input
-                        type="text"
-                        id="linkedin"
-                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                        value={formData.contactInfo?.linkedin || ''}
-                        onChange={(e) => handleContactInfoChange('linkedin', e.target.value)}
-                      />
+                    
+                    <div className="sm:col-span-3">
+                      <label htmlFor="linkedin" className="block text-sm font-medium text-gray-700">
+                        LinkedIn
+                      </label>
+                      <div className="mt-1">
+                        <input
+                          type="text"
+                          id="linkedin"
+                          className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                          value={formData.contactInfo?.linkedin || ''}
+                          onChange={(e) => handleContactInfoChange('linkedin', e.target.value)}
+                        />
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="sm:col-span-3">
-                    <label htmlFor="github" className="block text-sm font-medium text-gray-700">
-                      GitHub
-                    </label>
-                    <div className="mt-1">
-                      <input
-                        type="text"
-                        id="github"
-                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                        value={formData.contactInfo?.github || ''}
-                        onChange={(e) => handleContactInfoChange('github', e.target.value)}
-                      />
+                    
+                    <div className="sm:col-span-3">
+                      <label htmlFor="github" className="block text-sm font-medium text-gray-700">
+                        GitHub
+                      </label>
+                      <div className="mt-1">
+                        <input
+                          type="text"
+                          id="github"
+                          className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                          value={formData.contactInfo?.github || ''}
+                          onChange={(e) => handleContactInfoChange('github', e.target.value)}
+                        />
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="sm:col-span-3">
-                    <label htmlFor="website" className="block text-sm font-medium text-gray-700">
-                      Personal Website
-                    </label>
-                    <div className="mt-1">
-                      <input
-                        type="text"
-                        id="website"
-                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                        value={formData.contactInfo?.website || ''}
-                        onChange={(e) => handleContactInfoChange('website', e.target.value)}
-                      />
+                    
+                    <div className="sm:col-span-3">
+                      <label htmlFor="website" className="block text-sm font-medium text-gray-700">
+                        Personal Website
+                      </label>
+                      <div className="mt-1">
+                        <input
+                          type="text"
+                          id="website"
+                          className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                          value={formData.contactInfo?.website || ''}
+                          onChange={(e) => handleContactInfoChange('website', e.target.value)}
+                        />
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="sm:col-span-3">
-                    <label htmlFor="address" className="block text-sm font-medium text-gray-700">
-                      Address/Location
-                    </label>
-                    <div className="mt-1">
-                      <input
-                        type="text"
-                        id="address"
-                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                        value={formData.contactInfo?.address || ''}
-                        onChange={(e) => handleContactInfoChange('address', e.target.value)}
-                      />
+                    
+                    <div className="sm:col-span-3">
+                      <label htmlFor="address" className="block text-sm font-medium text-gray-700">
+                        Address/Location
+                      </label>
+                      <div className="mt-1">
+                        <input
+                          type="text"
+                          id="address"
+                          className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                          value={formData.contactInfo?.address || ''}
+                          onChange={(e) => handleContactInfoChange('address', e.target.value)}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -594,110 +723,118 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
             {currentSection === 'skills' && (
               <div className="space-y-6">
                 <div>
-                  <label htmlFor="skills" className="block text-sm font-medium text-gray-700">
-                    Skills
-                  </label>
-                  <div className="mt-1 flex">
-                    <input
-                      type="text"
-                      id="skills"
-                      className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                      placeholder="Add a skill (e.g., JavaScript, Project Management)"
-                      value={newSkill}
-                      onChange={(e) => setNewSkill(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSkill())}
-                    />
-                    <button
-                      type="button"
-                      className="ml-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                      onClick={handleAddSkill}
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {formData.skills.map((skill, index) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-primary-100 text-primary-800"
+                  <SectionHeading title="Skills" />
+                  <div className="mt-4">
+                    <div className="mt-1 flex">
+                      <input
+                        type="text"
+                        id="skills"
+                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        placeholder="Add a skill (e.g., JavaScript, Project Management)"
+                        value={newSkill}
+                        onChange={(e) => setNewSkill(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSkill())}
+                      />
+                      <button
+                        type="button"
+                        className="ml-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                        onClick={handleAddSkill}
                       >
-                        {skill}
-                        <button
-                          type="button"
-                          className="ml-1.5 inline-flex flex-shrink-0 h-4 w-4 rounded-full text-primary-400 hover:text-primary-500 focus:outline-none focus:text-primary-500"
-                          onClick={() => handleRemoveSkill(skill)}
-                        >
-                          <span className="sr-only">Remove {skill}</span>
-                          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path
-                              fillRule="evenodd"
-                              d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </button>
-                      </span>
-                    ))}
+                        Add
+                      </button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {formData.skills.length === 0 ? (
+                        <p className="text-sm text-gray-500 italic">Add skills to make your resume stand out.</p>
+                      ) : (
+                        formData.skills.map((skill, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-primary-100 text-primary-800"
+                          >
+                            {skill}
+                            <button
+                              type="button"
+                              className="ml-1.5 inline-flex flex-shrink-0 h-4 w-4 rounded-full text-primary-400 hover:text-primary-500 focus:outline-none focus:text-primary-500"
+                              onClick={() => handleRemoveSkill(skill)}
+                            >
+                              <span className="sr-only">Remove {skill}</span>
+                              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path
+                                  fillRule="evenodd"
+                                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                            </button>
+                          </span>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </div>
                 
                 <div>
-                  <label htmlFor="languages" className="block text-sm font-medium text-gray-700">
-                    Languages
-                  </label>
-                  <div className="mt-1 flex space-x-2">
-                    <input
-                      type="text"
-                      id="languages"
-                      className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                      placeholder="Add a language (e.g., English, Spanish)"
-                      value={newLanguage}
-                      onChange={(e) => setNewLanguage(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddLanguage())}
-                    />
-                    <select
-                      id="language-fluency"
-                      className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-40 sm:text-sm border-gray-300 rounded-md"
-                      value={newLanguageFluency}
-                      onChange={(e) => setNewLanguageFluency(e.target.value)}
-                    >
-                      <option value="Native">Native</option>
-                      <option value="Fluent">Fluent</option>
-                      <option value="Advanced">Advanced</option>
-                      <option value="Intermediate">Intermediate</option>
-                      <option value="Basic">Basic</option>
-                    </select>
-                    <button
-                      type="button"
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                      onClick={handleAddLanguage}
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {formData.languages.map((language, index) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
+                  <SectionHeading title="Languages" />
+                  <div className="mt-4">
+                    <div className="flex flex-wrap space-x-2">
+                      <input
+                        type="text"
+                        id="languages"
+                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        placeholder="Add a language (e.g., English, Spanish)"
+                        value={newLanguage}
+                        onChange={(e) => setNewLanguage(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddLanguage())}
+                      />
+                      <select
+                        id="language-fluency"
+                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-40 sm:text-sm border-gray-300 rounded-md"
+                        value={newLanguageFluency}
+                        onChange={(e) => setNewLanguageFluency(e.target.value)}
                       >
-                        {language.name} - {language.fluency}
-                        <button
-                          type="button"
-                          className="ml-1.5 inline-flex flex-shrink-0 h-4 w-4 rounded-full text-blue-400 hover:text-blue-500 focus:outline-none focus:text-blue-500"
-                          onClick={() => handleRemoveLanguage(language.name)}
-                        >
-                          <span className="sr-only">Remove {language.name}</span>
-                          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path
-                              fillRule="evenodd"
-                              d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </button>
-                      </span>
-                    ))}
+                        <option value="Native">Native</option>
+                        <option value="Fluent">Fluent</option>
+                        <option value="Advanced">Advanced</option>
+                        <option value="Intermediate">Intermediate</option>
+                        <option value="Basic">Basic</option>
+                      </select>
+                      <button
+                        type="button"
+                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                        onClick={handleAddLanguage}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {formData.languages.length === 0 ? (
+                        <p className="text-sm text-gray-500 italic">Add languages to showcase your communication skills.</p>
+                      ) : (
+                        formData.languages.map((language, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
+                          >
+                            {language.name} - {language.fluency}
+                            <button
+                              type="button"
+                              className="ml-1.5 inline-flex flex-shrink-0 h-4 w-4 rounded-full text-blue-400 hover:text-blue-500 focus:outline-none focus:text-blue-500"
+                              onClick={() => handleRemoveLanguage(language.name)}
+                            >
+                              <span className="sr-only">Remove {language.name}</span>
+                              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path
+                                  fillRule="evenodd"
+                                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                            </button>
+                          </span>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -705,25 +842,36 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
             
             {currentSection === 'experience' && (
               <div className="space-y-8">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium text-gray-900">Work Experience</h3>
-                  <button
-                    type="button"
-                    onClick={handleAddExperience}
-                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                  >
-                    Add Experience
-                  </button>
-                </div>
+                <SectionHeading 
+                  title="Work Experience" 
+                  buttonText="Add Experience"
+                  onButtonClick={handleAddExperience}
+                />
                 
                 {formData.experience.length === 0 ? (
-                  <div className="text-center py-4 text-gray-500">
-                    <p>No work experience added yet. Click "Add Experience" to get started.</p>
+                  <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <h3 className="mt-2 text-sm font-medium text-gray-900">No work experience</h3>
+                    <p className="mt-1 text-sm text-gray-500">Get started by adding your work experience.</p>
+                    <div className="mt-6">
+                      <button
+                        type="button"
+                        onClick={handleAddExperience}
+                        className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      >
+                        <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                        </svg>
+                        Add Experience
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-6">
                     {formData.experience.map((exp, index) => (
-                      <div key={index} className="bg-gray-50 p-4 rounded-md relative">
+                      <div key={index} className="bg-gray-50 p-4 rounded-md relative border border-gray-200 shadow-sm">
                         <button
                           type="button"
                           className="absolute top-2 right-2 text-gray-400 hover:text-gray-500"
@@ -776,13 +924,13 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
                             </label>
                             <div className="mt-1">
                               <input
-                                type="text"
+                                type="month"
                                 id={`start-date-${index}`}
-                                placeholder="MM/YYYY"
                                 value={exp.startDate}
                                 onChange={(e) => handleExperienceChange(index, 'startDate', e.target.value)}
                                 className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
                               />
+                              <p className="mt-1 text-xs text-gray-500">Format: MM/YYYY</p>
                             </div>
                           </div>
                           
@@ -792,14 +940,14 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
                             </label>
                             <div className="mt-1">
                               <input
-                                type="text"
+                                type="month"
                                 id={`end-date-${index}`}
-                                placeholder="MM/YYYY or Present"
-                                value={exp.endDate}
+                                value={exp.endDate || ''}
                                 disabled={exp.isCurrentPosition}
                                 onChange={(e) => handleExperienceChange(index, 'endDate', e.target.value)}
                                 className={`shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md ${exp.isCurrentPosition ? 'bg-gray-100' : ''}`}
                               />
+                              <p className="mt-1 text-xs text-gray-500">Leave empty for current positions</p>
                             </div>
                           </div>
                           
@@ -842,25 +990,36 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
             
             {currentSection === 'education' && (
               <div className="space-y-8">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium text-gray-900">Education</h3>
-                  <button
-                    type="button"
-                    onClick={handleAddEducation}
-                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                  >
-                    Add Education
-                  </button>
-                </div>
+                <SectionHeading 
+                  title="Education" 
+                  buttonText="Add Education"
+                  onButtonClick={handleAddEducation}
+                />
                 
                 {formData.education.length === 0 ? (
-                  <div className="text-center py-4 text-gray-500">
-                    <p>No education added yet. Click "Add Education" to get started.</p>
+                  <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 14l9-5-9-5-9 5 9 5m0 0l9-5-9-5-9 5 9 5m0 0v6" />
+                    </svg>
+                    <h3 className="mt-2 text-sm font-medium text-gray-900">No education added</h3>
+                    <p className="mt-1 text-sm text-gray-500">Get started by adding your educational background.</p>
+                    <div className="mt-6">
+                      <button
+                        type="button"
+                        onClick={handleAddEducation}
+                        className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      >
+                        <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                        </svg>
+                        Add Education
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-6">
                     {formData.education.map((edu, index) => (
-                      <div key={index} className="bg-gray-50 p-4 rounded-md relative">
+                      <div key={index} className="bg-gray-50 p-4 rounded-md relative border border-gray-200 shadow-sm">
                         <button
                           type="button"
                           className="absolute top-2 right-2 text-gray-400 hover:text-gray-500"
@@ -930,13 +1089,13 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
                             </label>
                             <div className="mt-1">
                               <input
-                                type="text"
+                                type="month"
                                 id={`edu-start-date-${index}`}
-                                placeholder="MM/YYYY"
                                 value={edu.startDate}
                                 onChange={(e) => handleEducationChange(index, 'startDate', e.target.value)}
                                 className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
                               />
+                              <p className="mt-1 text-xs text-gray-500">Format: MM/YYYY</p>
                             </div>
                           </div>
                           
@@ -946,13 +1105,13 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
                             </label>
                             <div className="mt-1">
                               <input
-                                type="text"
+                                type="month"
                                 id={`edu-end-date-${index}`}
-                                placeholder="MM/YYYY or Expected graduation date"
-                                value={edu.endDate}
+                                value={edu.endDate || ''}
                                 onChange={(e) => handleEducationChange(index, 'endDate', e.target.value)}
                                 className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
                               />
+                              <p className="mt-1 text-xs text-gray-500">For expected graduation, enter the future date</p>
                             </div>
                           </div>
                           
@@ -981,25 +1140,36 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
             
             {currentSection === 'projects' && (
               <div className="space-y-8">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium text-gray-900">Projects</h3>
-                  <button
-                    type="button"
-                    onClick={handleAddProject}
-                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                  >
-                    Add Project
-                  </button>
-                </div>
+                <SectionHeading 
+                  title="Projects" 
+                  buttonText="Add Project"
+                  onButtonClick={handleAddProject}
+                />
                 
                 {formData.projects.length === 0 ? (
-                  <div className="text-center py-4 text-gray-500">
-                    <p>No projects added yet. Click "Add Project" to get started.</p>
+                  <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <h3 className="mt-2 text-sm font-medium text-gray-900">No projects added</h3>
+                    <p className="mt-1 text-sm text-gray-500">Showcase your projects to stand out to employers.</p>
+                    <div className="mt-6">
+                      <button
+                        type="button"
+                        onClick={handleAddProject}
+                        className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      >
+                        <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                        </svg>
+                        Add Project
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-6">
                     {formData.projects.map((project, index) => (
-                      <div key={index} className="bg-gray-50 p-4 rounded-md relative">
+                      <div key={index} className="bg-gray-50 p-4 rounded-md relative border border-gray-200 shadow-sm">
                         <button
                           type="button"
                           className="absolute top-2 right-2 text-gray-400 hover:text-gray-500"
@@ -1053,9 +1223,8 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
                             </label>
                             <div className="mt-1">
                               <input
-                                type="text"
+                                type="month"
                                 id={`project-start-date-${index}`}
-                                placeholder="MM/YYYY"
                                 value={project.startDate || ''}
                                 onChange={(e) => handleProjectChange(index, 'startDate', e.target.value)}
                                 className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
@@ -1069,13 +1238,13 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
                             </label>
                             <div className="mt-1">
                               <input
-                                type="text"
+                                type="month"
                                 id={`project-end-date-${index}`}
-                                placeholder="MM/YYYY or Ongoing"
                                 value={project.endDate || ''}
                                 onChange={(e) => handleProjectChange(index, 'endDate', e.target.value)}
                                 className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
                               />
+                              <p className="mt-1 text-xs text-gray-500">Leave empty for ongoing projects</p>
                             </div>
                           </div>
                           
@@ -1118,23 +1287,54 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
             )}
           </div>
           
-          <div className="mt-6 flex justify-end space-x-3">
-            {onCancel && (
-              <button
-                type="button"
-                onClick={onCancel}
-                className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              >
-                Cancel
-              </button>
+          <div className="mt-8 border-t border-gray-200 pt-5">
+            {successMessage && (
+              <div className="mb-4 bg-green-50 border-l-4 border-green-400 p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-green-700">{successMessage}</p>
+                  </div>
+                </div>
+              </div>
             )}
-            <button
-              type="submit"
-              disabled={loading}
-              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
-            >
-              {loading ? 'Saving...' : (resumeId ? 'Update Resume' : 'Create Resume')}
-            </button>
+            
+            <div className="flex justify-end space-x-3">
+              {onCancel && (
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={loading}
+                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+              >
+                {loading ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Saving...
+                  </span>
+                ) : (
+                  resumeId ? 'Update Resume' : 'Create Resume'
+                )}
+              </button>
+            </div>
+            
+            <div className="mt-2 text-sm text-gray-500 text-right">
+              Make sure to save your resume before navigating away from this page.
+            </div>
           </div>
         </form>
       </div>

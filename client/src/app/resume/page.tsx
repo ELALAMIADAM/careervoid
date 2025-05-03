@@ -4,42 +4,42 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import Link from 'next/link';
-import ResumeForm from './ResumeForm';
+import ResumeList from './components/ResumeList';
+
+interface Resume {
+  id: string;
+  title: string;
+  fileName: string;
+  fileUrl: string;
+  skills: string[];
+  experience: any[];
+  education: any[];
+  isPrimary: boolean;
+  createdAt: string;
+  languages: string[];
+  projects: any[];
+  about: string;
+  contactInfo: {
+    email: string;
+    phone?: string;
+    linkedin?: string;
+    github?: string;
+    website?: string;
+    address?: string;
+  };
+}
 
 export default function ResumePage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [resumes, setResumes] = useState<any[]>([]);
+  const [resumes, setResumes] = useState<Resume[]>([]);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [showCreateOptions, setShowCreateOptions] = useState(false);
   const [showConfirmUploadDialog, setShowConfirmUploadDialog] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  
-  // For active resume form
-  const [activeResumeId, setActiveResumeId] = useState<string | null>(null);
-  const [showManualForm, setShowManualForm] = useState(true);
-  const [resumeData, setResumeData] = useState({
-    title: '',
-    skills: [] as string[],
-    experience: [] as any[],
-    education: [] as any[],
-    languages: [] as string[],
-    projects: [] as any[],
-    about: '',
-    contactInfo: {
-      email: '',  // Default empty string for required field
-      phone: '',
-      linkedin: '',
-      github: '',
-      website: '',
-      address: ''
-    }
-  });
-
-  // Add a flag to track if user has made changes
-  const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     // Check if user is logged in
@@ -122,42 +122,20 @@ export default function ResumePage() {
       setResumes([response.data.resume, ...resumes]);
       
       if (parseContent) {
-        setSuccessMessage('Resume uploaded successfully! We\'ve pre-filled the form with extracted information. Please review and complete any missing details.');
+        setSuccessMessage('Resume uploaded successfully! You can now edit it to add or modify information.');
         
-        // Populate the resume form with parsed data
-        setResumeData({
-          title: response.data.resume.fileName || '',
-          skills: response.data.resume.skills || [],
-          experience: response.data.resume.experience || [],
-          education: response.data.resume.education || [],
-          languages: response.data.resume.languages || [],
-          projects: response.data.resume.projects || [],
-          about: response.data.resume.about || '',
-          contactInfo: response.data.resume.contactInfo || {
-            email: '',
-            phone: '',
-            linkedin: '',
-            github: '',
-            website: '',
-            address: ''
-          }
-        });
-        
-        setActiveResumeId(response.data.resume.id);
+        // Redirect to edit page for the new resume
+        setTimeout(() => {
+          router.push(`/resume/${response.data.resume.id}`);
+        }, 1500);
       } else {
         setSuccessMessage('Resume uploaded successfully! You can now add your information manually.');
         
-        // Set just the title for manual entry
-        setResumeData({
-          ...resumeData,
-          title: response.data.resume.fileName || ''
-        });
-        
-        setActiveResumeId(response.data.resume.id);
+        // Redirect to edit page for the new resume
+        setTimeout(() => {
+          router.push(`/resume/${response.data.resume.id}`);
+        }, 1500);
       }
-      
-      // Show the manual form to edit/add details
-      setShowManualForm(true);
       
     } catch (error: any) {
       console.error('Error uploading resume:', error);
@@ -165,6 +143,7 @@ export default function ResumePage() {
     } finally {
       setUploadLoading(false);
       setUploadedFile(null);
+      setShowCreateOptions(false);
     }
   };
 
@@ -227,165 +206,9 @@ export default function ResumePage() {
       const updatedResumes = resumes.filter(resume => resume.id !== resumeId);
       setResumes(updatedResumes);
       setSuccessMessage('Resume deleted successfully');
-      
-      // If the active resume was deleted, reset the form
-      if (activeResumeId === resumeId) {
-        setActiveResumeId(null);
-        setResumeData({
-          title: '',
-          skills: [],
-          experience: [],
-          education: [],
-          languages: [],
-          projects: [],
-          about: '',
-          contactInfo: {
-            email: '',
-            phone: '',
-            linkedin: '',
-            github: '',
-            website: '',
-            address: ''
-          }
-        });
-      }
     } catch (error: any) {
       console.error('Error deleting resume:', error);
       setError(error.response?.data?.message || 'Failed to delete resume. Please try again.');
-    }
-  };
-
-  const handleEditResume = (resumeId: string) => {
-    const resumeToEdit = resumes.find(resume => resume.id === resumeId);
-    
-    if (resumeToEdit) {
-      setResumeData({
-        title: resumeToEdit.title || resumeToEdit.fileName || '',
-        skills: resumeToEdit.skills || [],
-        experience: resumeToEdit.experience || [],
-        education: resumeToEdit.education || [],
-        languages: resumeToEdit.languages || [],
-        projects: resumeToEdit.projects || [],
-        about: resumeToEdit.about || '',
-        contactInfo: resumeToEdit.contactInfo || {
-          email: '',
-          phone: '',
-          linkedin: '',
-          github: '',
-          website: '',
-          address: ''
-        }
-      });
-      
-      setActiveResumeId(resumeId);
-      setShowManualForm(true);
-      
-      // Scroll to the form
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
-  const handleFormCancel = () => {
-    setActiveResumeId(null);
-    setResumeData({
-      title: '',
-      skills: [],
-      experience: [],
-      education: [],
-      languages: [],
-      projects: [],
-      about: '',
-      contactInfo: {
-        email: '',
-        phone: '',
-        linkedin: '',
-        github: '',
-        website: '',
-        address: ''
-      }
-    });
-  };
-
-  const handleFormSubmit = async (formData: any) => {
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    
-    try {
-      let response: { data: { resume: any, message: string } };
-      
-      // Create a payload with the title included
-      const payload = {
-        ...formData,
-        title: formData.title || `Resume - ${new Date().toLocaleDateString()}`
-      };
-      
-      if (activeResumeId) {
-        console.log('Updating existing resume:', activeResumeId);
-        // Update existing resume
-        response = await axios.put(
-          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/resumes/${activeResumeId}`,
-          payload,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
-        );
-        
-        // Update the resume in the list
-        const updatedResumes = resumes.map(resume => 
-          resume.id === activeResumeId ? response.data.resume : resume
-        );
-        
-        setResumes(updatedResumes);
-        setSuccessMessage('Resume updated successfully');
-      } else {
-        console.log('Creating new resume');
-        // Create new resume manually
-        response = await axios.post(
-          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/resumes/manual`,
-          payload,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
-        );
-        
-        // Add the new resume to the list
-        setResumes([response.data.resume, ...resumes]);
-        setSuccessMessage('Resume created successfully');
-      }
-      
-      // Reset the form
-      setActiveResumeId(null);
-      setResumeData({
-        title: '',
-        skills: [],
-        experience: [],
-        education: [],
-        languages: [],
-        projects: [],
-        about: '',
-        contactInfo: {
-          email: '',
-          phone: '',
-          linkedin: '',
-          github: '',
-          website: '',
-          address: ''
-        }
-      });
-      
-      setHasChanges(false);
-      
-    } catch (error: any) {
-      console.error('Error saving resume:', error);
-      setError(error.response?.data?.message || 'Failed to save resume. Please try again.');
     }
   };
 
@@ -393,6 +216,22 @@ export default function ResumePage() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     router.push('/login');
+  };
+
+  const handleSetMessage = (type: 'success' | 'error', text: string) => {
+    if (type === 'success') {
+      setSuccessMessage(text);
+      setError('');
+    } else {
+      setError(text);
+      setSuccessMessage('');
+    }
+    
+    // Clear the message after 5 seconds
+    setTimeout(() => {
+      setError('');
+      setSuccessMessage('');
+    }, 5000);
   };
 
   if (loading) {
@@ -485,29 +324,86 @@ export default function ResumePage() {
               </div>
             )}
 
-            {/* Upload section */}
-            <div className="bg-white shadow sm:rounded-lg mt-6">
-              <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">Upload your resume</h3>
-                <div className="mt-2 max-w-xl text-sm text-gray-500">
-                  <p>Upload your resume file (PDF, DOC, or DOCX) to quickly populate your profile information.</p>
-                </div>
-                <form className="mt-5 sm:flex sm:items-center">
-                  <div className="w-full sm:max-w-xs">
-                    <label htmlFor="resume-upload" className="sr-only">Upload Resume</label>
-                    <input 
-                      id="resume-upload" 
-                      name="resume-upload" 
-                      type="file" 
-                      className="block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
-                      accept=".pdf,.doc,.docx"
-                      onChange={handleFileSelected}
-                      disabled={uploadLoading}
-                    />
-                  </div>
-                </form>
-              </div>
+            {/* Create Resume Button */}
+            <div className="mt-6 mb-8 flex justify-end">
+              <button
+                onClick={() => setShowCreateOptions(true)}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                <svg className="mr-2 -ml-1 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                </svg>
+                Create Resume
+              </button>
             </div>
+
+            {/* Create Resume Options Dialog */}
+            {showCreateOptions && (
+              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+                <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Create a New Resume</h3>
+                  <p className="text-sm text-gray-500 mb-6">
+                    Choose how you would like to create your resume:
+                  </p>
+                  
+                  <div className="space-y-4">
+                    <div className="border rounded-md p-4 hover:bg-gray-50 cursor-pointer" onClick={() => document.getElementById('resume-upload')?.click()}>
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 bg-primary-100 rounded-md p-2">
+                          <svg className="h-6 w-6 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12" />
+                          </svg>
+                        </div>
+                        <div className="ml-4">
+                          <h4 className="text-base font-medium text-gray-900">Upload Resume</h4>
+                          <p className="mt-1 text-sm text-gray-500">
+                            Upload a PDF, DOC, or DOCX file to extract information automatically.
+                          </p>
+                          <input 
+                            id="resume-upload" 
+                            name="resume-upload" 
+                            type="file" 
+                            className="hidden"
+                            accept=".pdf,.doc,.docx"
+                            onChange={handleFileSelected}
+                            disabled={uploadLoading}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="border rounded-md p-4 hover:bg-gray-50 cursor-pointer" onClick={() => {
+                      setShowCreateOptions(false);
+                      router.push('/resume/new');
+                    }}>
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 bg-blue-100 rounded-md p-2">
+                          <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </div>
+                        <div className="ml-4">
+                          <h4 className="text-base font-medium text-gray-900">Create Manually</h4>
+                          <p className="mt-1 text-sm text-gray-500">
+                            Build your resume from scratch by filling out the form.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateOptions(false)}
+                      className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Dialog for confirming resume parsing */}
             {showConfirmUploadDialog && (
@@ -538,93 +434,14 @@ export default function ResumePage() {
               </div>
             )}
 
-            {/* Resume form section - always visible by default */}
-            {showManualForm && (
-              <ResumeForm 
-                resumeId={activeResumeId || undefined}
-                initialData={resumeData}
-                onSubmit={handleFormSubmit}
-                onCancel={handleFormCancel}
-              />
-            )}
-
             {/* Resume list section */}
             <div className="mt-8">
               <h2 className="text-lg leading-6 font-medium text-gray-900 mb-4">Your Resumes</h2>
-              {resumes.length === 0 ? (
-                <div className="bg-white shadow overflow-hidden sm:rounded-md p-6 text-center text-gray-500">
-                  <p>You haven't created any resumes yet.</p>
-                </div>
-              ) : (
-                <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                  <ul className="divide-y divide-gray-200">
-                    {resumes.map((resume) => (
-                      <li key={resume.id}>
-                        <div className="px-4 py-4 sm:px-6">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <p className="text-sm font-medium text-primary-600 truncate">
-                                {resume.fileName}
-                              </p>
-                              {resume.isPrimary && (
-                                <span className="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary-100 text-primary-800">
-                                  Primary
-                                </span>
-                              )}
-                            </div>
-                            <div className="ml-2 flex-shrink-0 flex">
-                              <p className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                {resume.skills.length} skills
-                              </p>
-                            </div>
-                          </div>
-                          <div className="mt-2 flex justify-between">
-                            <div className="sm:flex">
-                              <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
-                                <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                                Created on {new Date(resume.createdAt).toLocaleDateString()}
-                              </div>
-                            </div>
-                            <div className="flex space-x-2">
-                              {!resume.isPrimary && (
-                                <button
-                                  type="button"
-                                  className="inline-flex items-center px-3 py-1 border border-transparent text-xs leading-4 font-medium rounded-md text-primary-700 bg-primary-100 hover:bg-primary-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                                  onClick={() => handleSetPrimary(resume.id)}
-                                >
-                                  Set as Primary
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                className="inline-flex items-center px-3 py-1 border border-transparent text-xs leading-4 font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                onClick={() => handleEditResume(resume.id)}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                className="inline-flex items-center px-3 py-1 border border-transparent text-xs leading-4 font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                                onClick={() => handleDeleteResume(resume.id)}
-                              >
-                                Delete
-                              </button>
-                              <Link 
-                                href={`/jobs/matching?resumeId=${resume.id}`}
-                                className="inline-flex items-center px-3 py-1 border border-transparent text-xs leading-4 font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                              >
-                                Find Matching Jobs
-                              </Link>
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <ResumeList 
+                resumes={resumes} 
+                onResumeUpdate={setResumes} 
+                onSetMessage={handleSetMessage} 
+              />
             </div>
           </div>
         </main>
