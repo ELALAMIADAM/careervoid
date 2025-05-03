@@ -6,7 +6,8 @@ import {
   getResumeById, 
   analyzeResume, 
   deleteResume, 
-  findMatchingJobs 
+  findMatchingJobs,
+  updateResume 
 } from '../controllers/resume.controller';
 import upload from '../services/upload.service';
 import { Resume } from '../models/resume.model';
@@ -48,14 +49,15 @@ router.post('/manual', async (req: AuthRequest, res) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const { skills, experience, education, languages, projects, about, contactInfo } = req.body;
+    const { title, skills, experience, education, languages, projects, about, contactInfo } = req.body;
 
-    // Create a generic filename
-    const fileName = `Manual Resume - ${new Date().toLocaleDateString()}`;
+    // Create a generic filename if title isn't provided
+    const resumeTitle = title || `Resume - ${new Date().toLocaleDateString()}`;
+    const fileName = `${resumeTitle}`;
     const fileUrl = '/manual'; // No actual file for manual resumes
 
     // Create a plaintext version from the submitted data
-    let plainText = `Resume\n\n`;
+    let plainText = `Resume: ${resumeTitle}\n\n`;
     
     if (about) {
       plainText += `About:\n${about}\n\n`;
@@ -82,9 +84,14 @@ router.post('/manual', async (req: AuthRequest, res) => {
       plainText += '\n';
     }
 
+    // Check if this is the user's first resume
+    const resumeCount = await Resume.count({ where: { userId: req.userId } });
+    const isPrimary = resumeCount === 0; // Make it primary if it's the first one
+
     // Create resume record
     const resume = await Resume.create({
       userId: req.userId,
+      title: resumeTitle,
       fileName,
       fileUrl,
       content: plainText, // Using the generated plaintext as content as well
@@ -92,7 +99,7 @@ router.post('/manual', async (req: AuthRequest, res) => {
       skills: skills || [],
       experience: experience || [],
       education: education || [],
-      isPrimary: false // Default to not primary
+      isPrimary // Default to not primary
     });
 
     // Optionally generate embedding for the resume asynchronously
@@ -105,6 +112,7 @@ router.post('/manual', async (req: AuthRequest, res) => {
       message: 'Resume created successfully',
       resume: {
         id: resume.id,
+        title: resume.title,
         fileName: resume.fileName,
         skills: resume.skills,
         experience: resume.experience,
@@ -179,6 +187,9 @@ router.get('/', getUserResumes);
 
 // Get a specific resume by ID
 router.get('/:id', getResumeById);
+
+// Update a resume
+router.put('/:id', updateResume);
 
 // Analyze a resume
 router.get('/:id/analyze', analyzeResume);

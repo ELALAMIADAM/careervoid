@@ -21,6 +21,7 @@ export default function ResumePage() {
   const [activeResumeId, setActiveResumeId] = useState<string | null>(null);
   const [showManualForm, setShowManualForm] = useState(true);
   const [resumeData, setResumeData] = useState({
+    title: '',
     skills: [] as string[],
     experience: [] as any[],
     education: [] as any[],
@@ -36,6 +37,9 @@ export default function ResumePage() {
       address: ''
     }
   });
+
+  // Add a flag to track if user has made changes
+  const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     // Check if user is logged in
@@ -122,18 +126,34 @@ export default function ResumePage() {
         
         // Populate the resume form with parsed data
         setResumeData({
+          title: response.data.resume.fileName || '',
           skills: response.data.resume.skills || [],
           experience: response.data.resume.experience || [],
           education: response.data.resume.education || [],
           languages: response.data.resume.languages || [],
           projects: response.data.resume.projects || [],
           about: response.data.resume.about || '',
-          contactInfo: response.data.resume.contactInfo || {}
+          contactInfo: response.data.resume.contactInfo || {
+            email: '',
+            phone: '',
+            linkedin: '',
+            github: '',
+            website: '',
+            address: ''
+          }
         });
         
         setActiveResumeId(response.data.resume.id);
       } else {
         setSuccessMessage('Resume uploaded successfully! You can now add your information manually.');
+        
+        // Set just the title for manual entry
+        setResumeData({
+          ...resumeData,
+          title: response.data.resume.fileName || ''
+        });
+        
+        setActiveResumeId(response.data.resume.id);
       }
       
       // Show the manual form to edit/add details
@@ -212,6 +232,7 @@ export default function ResumePage() {
       if (activeResumeId === resumeId) {
         setActiveResumeId(null);
         setResumeData({
+          title: '',
           skills: [],
           experience: [],
           education: [],
@@ -239,13 +260,21 @@ export default function ResumePage() {
     
     if (resumeToEdit) {
       setResumeData({
+        title: resumeToEdit.title || resumeToEdit.fileName || '',
         skills: resumeToEdit.skills || [],
         experience: resumeToEdit.experience || [],
         education: resumeToEdit.education || [],
         languages: resumeToEdit.languages || [],
         projects: resumeToEdit.projects || [],
         about: resumeToEdit.about || '',
-        contactInfo: resumeToEdit.contactInfo || {}
+        contactInfo: resumeToEdit.contactInfo || {
+          email: '',
+          phone: '',
+          linkedin: '',
+          github: '',
+          website: '',
+          address: ''
+        }
       });
       
       setActiveResumeId(resumeId);
@@ -259,6 +288,7 @@ export default function ResumePage() {
   const handleFormCancel = () => {
     setActiveResumeId(null);
     setResumeData({
+      title: '',
       skills: [],
       experience: [],
       education: [],
@@ -287,11 +317,18 @@ export default function ResumePage() {
     try {
       let response: { data: { resume: any, message: string } };
       
+      // Create a payload with the title included
+      const payload = {
+        ...formData,
+        title: formData.title || `Resume - ${new Date().toLocaleDateString()}`
+      };
+      
       if (activeResumeId) {
+        console.log('Updating existing resume:', activeResumeId);
         // Update existing resume
         response = await axios.put(
           `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/resumes/${activeResumeId}`,
-          formData,
+          payload,
           {
             headers: {
               Authorization: `Bearer ${token}`
@@ -307,10 +344,11 @@ export default function ResumePage() {
         setResumes(updatedResumes);
         setSuccessMessage('Resume updated successfully');
       } else {
+        console.log('Creating new resume');
         // Create new resume manually
         response = await axios.post(
           `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/resumes/manual`,
-          formData,
+          payload,
           {
             headers: {
               Authorization: `Bearer ${token}`
@@ -326,6 +364,7 @@ export default function ResumePage() {
       // Reset the form
       setActiveResumeId(null);
       setResumeData({
+        title: '',
         skills: [],
         experience: [],
         education: [],
@@ -341,6 +380,8 @@ export default function ResumePage() {
           address: ''
         }
       });
+      
+      setHasChanges(false);
       
     } catch (error: any) {
       console.error('Error saving resume:', error);

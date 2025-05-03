@@ -6,6 +6,7 @@ import { User } from './user.model';
 interface ResumeAttributes {
   id: string;
   userId: string;
+  title: string;
   fileName: string;
   fileUrl: string;
   content: string;
@@ -41,6 +42,7 @@ interface ResumeCreationAttributes extends Optional<ResumeAttributes, 'id' | 'cr
 class Resume extends Model<ResumeAttributes, ResumeCreationAttributes> implements ResumeAttributes {
   public id!: string;
   public userId!: string;
+  public title!: string;
   public fileName!: string;
   public fileUrl!: string;
   public content!: string;
@@ -71,6 +73,11 @@ Resume.init(
         key: 'id',
       },
       onDelete: 'CASCADE',
+    },
+    title: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: 'Resume',
     },
     fileName: {
       type: DataTypes.STRING,

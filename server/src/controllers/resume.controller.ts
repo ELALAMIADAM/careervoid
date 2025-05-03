@@ -52,6 +52,10 @@ export const uploadResume = async (req: AuthRequest, res: Response) => {
     const filePath = req.file.path;
     const fileName = req.file.originalname;
     const fileUrl = `/uploads/${path.basename(filePath)}`;
+    
+    // Set the title to the original filename without extension
+    const fileExtension = fileName.lastIndexOf('.');
+    const title = fileExtension > 0 ? fileName.substring(0, fileExtension) : fileName;
 
     // Parse resume content from the file
     const parsedFile = await parseResumeFile(filePath);
@@ -166,6 +170,7 @@ export const uploadResume = async (req: AuthRequest, res: Response) => {
     // Create resume record
     const resume = await Resume.create({
       userId: req.userId,
+      title,
       fileName,
       fileUrl,
       content,
@@ -186,6 +191,7 @@ export const uploadResume = async (req: AuthRequest, res: Response) => {
       message: 'Resume uploaded successfully',
       resume: {
         id: resume.id,
+        title: resume.title,
         fileName: resume.fileName,
         fileUrl: resume.fileUrl,
         skills: resume.skills,
@@ -408,5 +414,94 @@ export const findMatchingJobs = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error finding matching jobs:', error);
     res.status(500).json({ message: 'Server error while finding matching jobs' });
+  }
+};
+
+/**
+ * Update an existing resume
+ */
+export const updateResume = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const resumeId = req.params.id;
+    const { title, skills, experience, education, languages, projects, about, contactInfo } = req.body;
+
+    // Find the resume
+    const resume = await Resume.findOne({
+      where: {
+        id: resumeId,
+        userId: req.userId
+      }
+    });
+
+    if (!resume) {
+      return res.status(404).json({ message: 'Resume not found' });
+    }
+
+    // Update the plaintext content
+    let plainText = `Resume: ${title || resume.title}\n\n`;
+    
+    if (about) {
+      plainText += `About:\n${about}\n\n`;
+    }
+    
+    if (skills && skills.length > 0) {
+      plainText += `Skills: ${skills.join(', ')}\n\n`;
+    }
+    
+    if (experience && experience.length > 0) {
+      plainText += `Experience:\n`;
+      experience.forEach((exp: Experience) => {
+        plainText += `- ${exp.position} at ${exp.company} (${exp.startDate} - ${exp.endDate || 'Present'})\n`;
+        plainText += `  ${exp.description}\n`;
+      });
+      plainText += '\n';
+    }
+    
+    if (education && education.length > 0) {
+      plainText += `Education:\n`;
+      education.forEach((edu: Education) => {
+        plainText += `- ${edu.degree} in ${edu.fieldOfStudy} at ${edu.institution} (${edu.startDate} - ${edu.endDate || ''})\n`;
+      });
+      plainText += '\n';
+    }
+
+    // Update the resume
+    await resume.update({
+      title: title || resume.title,
+      content: plainText,
+      plainText,
+      skills: skills || resume.skills,
+      experience: experience || resume.experience,
+      education: education || resume.education
+    });
+
+    // If the vector embedding was already generated, regenerate it
+    if (resume.vectorEmbedding && vectorService && typeof vectorService.generateResumeEmbedding === 'function') {
+      vectorService.generateResumeEmbedding(resume.id)
+        .catch(err => console.error('Error regenerating resume embedding:', err));
+    }
+
+    res.status(200).json({
+      message: 'Resume updated successfully',
+      resume: {
+        id: resume.id,
+        title: resume.title,
+        fileName: resume.fileName,
+        fileUrl: resume.fileUrl,
+        skills: resume.skills,
+        experience: resume.experience,
+        education: resume.education,
+        isPrimary: resume.isPrimary,
+        createdAt: resume.createdAt,
+        updatedAt: resume.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Error updating resume:', error);
+    res.status(500).json({ message: 'Server error during resume update' });
   }
 }; 

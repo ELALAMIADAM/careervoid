@@ -6,6 +6,7 @@ import axios from 'axios';
 interface ResumeFormProps {
   resumeId?: string;
   initialData?: {
+    title?: string;
     skills: string[];
     experience: Experience[];
     education: Education[];
@@ -57,12 +58,18 @@ interface ContactInfo {
   address?: string;
 }
 
+interface Language {
+  name: string;
+  fluency: string; // e.g., "Native", "Fluent", "Intermediate", "Basic"
+}
+
 export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }: ResumeFormProps) {
   const [formData, setFormData] = useState({
+    title: '',
     skills: [] as string[],
     experience: [] as Experience[],
     education: [] as Education[],
-    languages: [] as string[],
+    languages: [] as Language[],
     projects: [] as Project[],
     about: '',
     contactInfo: {
@@ -77,16 +84,44 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
   
   const [newSkill, setNewSkill] = useState('');
   const [newLanguage, setNewLanguage] = useState('');
+  const [newLanguageFluency, setNewLanguageFluency] = useState('Fluent');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [currentSection, setCurrentSection] = useState('personal');
   
   useEffect(() => {
+    console.log('Current section:', currentSection);
+  }, [currentSection]);
+  
+  useEffect(() => {
     if (initialData) {
+      // Handle languages separately to avoid type issues
+      let languages: Language[] = [];
+      if (initialData.languages && Array.isArray(initialData.languages)) {
+        languages = initialData.languages.map((lang: any) => {
+          if (typeof lang === 'string') {
+            return { name: lang, fluency: 'Fluent' };
+          }
+          return lang as Language;
+        });
+      }
+      
       setFormData({
-        ...formData,
-        ...initialData,
-        contactInfo: initialData.contactInfo || formData.contactInfo
+        title: initialData.title || '',
+        skills: initialData.skills || [],
+        experience: initialData.experience || [],
+        education: initialData.education || [],
+        languages,
+        projects: initialData.projects || [],
+        about: initialData.about || '',
+        contactInfo: initialData.contactInfo || {
+          email: '',
+          phone: '',
+          linkedin: '',
+          github: '',
+          website: '',
+          address: ''
+        }
       });
     }
     
@@ -118,10 +153,11 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
       
       // Transform the data to match our form structure
       setFormData({
+        title: resumeData.title || resumeData.fileName || '',
         skills: resumeData.skills || [],
         experience: resumeData.experience || [],
         education: resumeData.education || [],
-        languages: resumeData.languages || [],
+        languages: resumeData.languages?.map((lang: any) => ({ name: lang, fluency: 'Fluent' })) || [],
         projects: resumeData.projects || [],
         about: resumeData.about || '',
         contactInfo: resumeData.contactInfo || formData.contactInfo
@@ -152,10 +188,13 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
   };
   
   const handleAddLanguage = () => {
-    if (newLanguage.trim() && !formData.languages.includes(newLanguage.trim())) {
+    if (newLanguage.trim() && !formData.languages.some(lang => lang.name === newLanguage.trim())) {
       setFormData({
         ...formData,
-        languages: [...formData.languages, newLanguage.trim()]
+        languages: [...formData.languages, { 
+          name: newLanguage.trim(), 
+          fluency: newLanguageFluency 
+        }]
       });
       setNewLanguage('');
     }
@@ -164,7 +203,7 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
   const handleRemoveLanguage = (languageToRemove: string) => {
     setFormData({
       ...formData,
-      languages: formData.languages.filter(language => language !== languageToRemove)
+      languages: formData.languages.filter(lang => lang.name !== languageToRemove)
     });
   };
   
@@ -371,6 +410,7 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
         ].map((tab) => (
           <button
             key={tab.id}
+            type="button"
             onClick={() => setCurrentSection(tab.id)}
             className={`
               whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
@@ -422,6 +462,25 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
           <div className="mt-6">
             {currentSection === 'personal' && (
               <div className="space-y-6">
+                <div>
+                  <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+                    Resume Title
+                  </label>
+                  <div className="mt-1">
+                    <input
+                      type="text"
+                      id="title"
+                      className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                      placeholder="Professional Resume, Technical Resume, etc."
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    />
+                  </div>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Give your resume a descriptive name to help you identify it later.
+                  </p>
+                </div>
+                
                 <div>
                   <label htmlFor="about" className="block text-sm font-medium text-gray-700">
                     About / Professional Summary
@@ -586,7 +645,7 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
                   <label htmlFor="languages" className="block text-sm font-medium text-gray-700">
                     Languages
                   </label>
-                  <div className="mt-1 flex">
+                  <div className="mt-1 flex space-x-2">
                     <input
                       type="text"
                       id="languages"
@@ -596,9 +655,21 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
                       onChange={(e) => setNewLanguage(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddLanguage())}
                     />
+                    <select
+                      id="language-fluency"
+                      className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-40 sm:text-sm border-gray-300 rounded-md"
+                      value={newLanguageFluency}
+                      onChange={(e) => setNewLanguageFluency(e.target.value)}
+                    >
+                      <option value="Native">Native</option>
+                      <option value="Fluent">Fluent</option>
+                      <option value="Advanced">Advanced</option>
+                      <option value="Intermediate">Intermediate</option>
+                      <option value="Basic">Basic</option>
+                    </select>
                     <button
                       type="button"
-                      className="ml-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                       onClick={handleAddLanguage}
                     >
                       Add
@@ -610,13 +681,13 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
                         key={index}
                         className="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
                       >
-                        {language}
+                        {language.name} - {language.fluency}
                         <button
                           type="button"
                           className="ml-1.5 inline-flex flex-shrink-0 h-4 w-4 rounded-full text-blue-400 hover:text-blue-500 focus:outline-none focus:text-blue-500"
-                          onClick={() => handleRemoveLanguage(language)}
+                          onClick={() => handleRemoveLanguage(language.name)}
                         >
-                          <span className="sr-only">Remove {language}</span>
+                          <span className="sr-only">Remove {language.name}</span>
                           <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
                             <path
                               fillRule="evenodd"
@@ -632,7 +703,419 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
               </div>
             )}
             
-            {/* Rest of the form sections would be here */}
+            {currentSection === 'experience' && (
+              <div className="space-y-8">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium text-gray-900">Work Experience</h3>
+                  <button
+                    type="button"
+                    onClick={handleAddExperience}
+                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Add Experience
+                  </button>
+                </div>
+                
+                {formData.experience.length === 0 ? (
+                  <div className="text-center py-4 text-gray-500">
+                    <p>No work experience added yet. Click "Add Experience" to get started.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {formData.experience.map((exp, index) => (
+                      <div key={index} className="bg-gray-50 p-4 rounded-md relative">
+                        <button
+                          type="button"
+                          className="absolute top-2 right-2 text-gray-400 hover:text-gray-500"
+                          onClick={() => handleRemoveExperience(index)}
+                        >
+                          <span className="sr-only">Remove experience</span>
+                          <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path
+                              fillRule="evenodd"
+                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                        
+                        <div className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-6">
+                          <div className="sm:col-span-3">
+                            <label htmlFor={`company-${index}`} className="block text-sm font-medium text-gray-700">
+                              Company
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`company-${index}`}
+                                value={exp.company}
+                                onChange={(e) => handleExperienceChange(index, 'company', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="sm:col-span-3">
+                            <label htmlFor={`position-${index}`} className="block text-sm font-medium text-gray-700">
+                              Position
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`position-${index}`}
+                                value={exp.position}
+                                onChange={(e) => handleExperienceChange(index, 'position', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="sm:col-span-2">
+                            <label htmlFor={`start-date-${index}`} className="block text-sm font-medium text-gray-700">
+                              Start Date
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`start-date-${index}`}
+                                placeholder="MM/YYYY"
+                                value={exp.startDate}
+                                onChange={(e) => handleExperienceChange(index, 'startDate', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="sm:col-span-2">
+                            <label htmlFor={`end-date-${index}`} className="block text-sm font-medium text-gray-700">
+                              End Date
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`end-date-${index}`}
+                                placeholder="MM/YYYY or Present"
+                                value={exp.endDate}
+                                disabled={exp.isCurrentPosition}
+                                onChange={(e) => handleExperienceChange(index, 'endDate', e.target.value)}
+                                className={`shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md ${exp.isCurrentPosition ? 'bg-gray-100' : ''}`}
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="sm:col-span-2">
+                            <div className="flex items-center h-full pt-5">
+                              <input
+                                id={`current-position-${index}`}
+                                type="checkbox"
+                                checked={exp.isCurrentPosition}
+                                onChange={(e) => handleExperienceChange(index, 'isCurrentPosition', e.target.checked)}
+                                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                              />
+                              <label htmlFor={`current-position-${index}`} className="ml-2 block text-sm text-gray-700">
+                                Current Position
+                              </label>
+                            </div>
+                          </div>
+                          
+                          <div className="sm:col-span-6">
+                            <label htmlFor={`description-${index}`} className="block text-sm font-medium text-gray-700">
+                              Description
+                            </label>
+                            <div className="mt-1">
+                              <textarea
+                                id={`description-${index}`}
+                                rows={3}
+                                value={exp.description}
+                                onChange={(e) => handleExperienceChange(index, 'description', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {currentSection === 'education' && (
+              <div className="space-y-8">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium text-gray-900">Education</h3>
+                  <button
+                    type="button"
+                    onClick={handleAddEducation}
+                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Add Education
+                  </button>
+                </div>
+                
+                {formData.education.length === 0 ? (
+                  <div className="text-center py-4 text-gray-500">
+                    <p>No education added yet. Click "Add Education" to get started.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {formData.education.map((edu, index) => (
+                      <div key={index} className="bg-gray-50 p-4 rounded-md relative">
+                        <button
+                          type="button"
+                          className="absolute top-2 right-2 text-gray-400 hover:text-gray-500"
+                          onClick={() => handleRemoveEducation(index)}
+                        >
+                          <span className="sr-only">Remove education</span>
+                          <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path
+                              fillRule="evenodd"
+                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                        
+                        <div className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-6">
+                          <div className="sm:col-span-3">
+                            <label htmlFor={`institution-${index}`} className="block text-sm font-medium text-gray-700">
+                              Institution
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`institution-${index}`}
+                                value={edu.institution}
+                                onChange={(e) => handleEducationChange(index, 'institution', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="sm:col-span-3">
+                            <label htmlFor={`degree-${index}`} className="block text-sm font-medium text-gray-700">
+                              Degree
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`degree-${index}`}
+                                value={edu.degree}
+                                onChange={(e) => handleEducationChange(index, 'degree', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="sm:col-span-3">
+                            <label htmlFor={`field-of-study-${index}`} className="block text-sm font-medium text-gray-700">
+                              Field of Study
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`field-of-study-${index}`}
+                                value={edu.fieldOfStudy}
+                                onChange={(e) => handleEducationChange(index, 'fieldOfStudy', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="sm:col-span-3"></div>
+                          
+                          <div className="sm:col-span-3">
+                            <label htmlFor={`edu-start-date-${index}`} className="block text-sm font-medium text-gray-700">
+                              Start Date
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`edu-start-date-${index}`}
+                                placeholder="MM/YYYY"
+                                value={edu.startDate}
+                                onChange={(e) => handleEducationChange(index, 'startDate', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="sm:col-span-3">
+                            <label htmlFor={`edu-end-date-${index}`} className="block text-sm font-medium text-gray-700">
+                              End Date
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`edu-end-date-${index}`}
+                                placeholder="MM/YYYY or Expected graduation date"
+                                value={edu.endDate}
+                                onChange={(e) => handleEducationChange(index, 'endDate', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="sm:col-span-6">
+                            <label htmlFor={`edu-description-${index}`} className="block text-sm font-medium text-gray-700">
+                              Description (Optional)
+                            </label>
+                            <div className="mt-1">
+                              <textarea
+                                id={`edu-description-${index}`}
+                                rows={3}
+                                value={edu.description || ''}
+                                onChange={(e) => handleEducationChange(index, 'description', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                placeholder="Honors, achievements, relevant coursework, etc."
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {currentSection === 'projects' && (
+              <div className="space-y-8">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium text-gray-900">Projects</h3>
+                  <button
+                    type="button"
+                    onClick={handleAddProject}
+                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Add Project
+                  </button>
+                </div>
+                
+                {formData.projects.length === 0 ? (
+                  <div className="text-center py-4 text-gray-500">
+                    <p>No projects added yet. Click "Add Project" to get started.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {formData.projects.map((project, index) => (
+                      <div key={index} className="bg-gray-50 p-4 rounded-md relative">
+                        <button
+                          type="button"
+                          className="absolute top-2 right-2 text-gray-400 hover:text-gray-500"
+                          onClick={() => handleRemoveProject(index)}
+                        >
+                          <span className="sr-only">Remove project</span>
+                          <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path
+                              fillRule="evenodd"
+                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                        
+                        <div className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-6">
+                          <div className="sm:col-span-4">
+                            <label htmlFor={`project-name-${index}`} className="block text-sm font-medium text-gray-700">
+                              Project Name
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`project-name-${index}`}
+                                value={project.name}
+                                onChange={(e) => handleProjectChange(index, 'name', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="sm:col-span-6">
+                            <label htmlFor={`project-url-${index}`} className="block text-sm font-medium text-gray-700">
+                              Project URL (Optional)
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`project-url-${index}`}
+                                value={project.url || ''}
+                                onChange={(e) => handleProjectChange(index, 'url', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                placeholder="https://example.com"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="sm:col-span-3">
+                            <label htmlFor={`project-start-date-${index}`} className="block text-sm font-medium text-gray-700">
+                              Start Date (Optional)
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`project-start-date-${index}`}
+                                placeholder="MM/YYYY"
+                                value={project.startDate || ''}
+                                onChange={(e) => handleProjectChange(index, 'startDate', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="sm:col-span-3">
+                            <label htmlFor={`project-end-date-${index}`} className="block text-sm font-medium text-gray-700">
+                              End Date (Optional)
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`project-end-date-${index}`}
+                                placeholder="MM/YYYY or Ongoing"
+                                value={project.endDate || ''}
+                                onChange={(e) => handleProjectChange(index, 'endDate', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="sm:col-span-6">
+                            <label htmlFor={`project-description-${index}`} className="block text-sm font-medium text-gray-700">
+                              Description
+                            </label>
+                            <div className="mt-1">
+                              <textarea
+                                id={`project-description-${index}`}
+                                rows={3}
+                                value={project.description}
+                                onChange={(e) => handleProjectChange(index, 'description', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="sm:col-span-6">
+                            <label htmlFor={`project-technologies-${index}`} className="block text-sm font-medium text-gray-700">
+                              Technologies Used
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`project-technologies-${index}`}
+                                value={project.technologies.join(', ')}
+                                onChange={(e) => handleProjectChange(index, 'technologies', e.target.value)}
+                                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                placeholder="JavaScript, React, Node.js, etc. (comma separated)"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           
           <div className="mt-6 flex justify-end space-x-3">
@@ -650,7 +1133,7 @@ export default function ResumeForm({ resumeId, initialData, onSubmit, onCancel }
               disabled={loading}
               className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
             >
-              {loading ? 'Saving...' : 'Save Resume'}
+              {loading ? 'Saving...' : (resumeId ? 'Update Resume' : 'Create Resume')}
             </button>
           </div>
         </form>
