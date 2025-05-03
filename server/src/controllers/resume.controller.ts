@@ -3,9 +3,34 @@ import path from 'path';
 import fs from 'fs';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { Resume } from '../models/resume.model';
-import uploadService from '../services/upload.service';
+import uploadService, { parseResumeFile } from '../services/upload.service';
 import openaiService from '../services/openai.service';
 import vectorService from '../services/vector.service';
+
+// Define interfaces for resume data
+interface Experience {
+  company: string;
+  position: string;
+  startDate: string;
+  endDate?: string;
+  description: string;
+}
+
+interface Education {
+  institution: string;
+  degree: string;
+  fieldOfStudy: string;
+  startDate: string;
+  endDate?: string;
+}
+
+interface ParsedResumeData {
+  experience: Experience[];
+  education: Education[];
+  languages: string[];
+  projects: any[];
+  contactInfo: any;
+}
 
 /**
  * Upload and process a new resume
@@ -20,23 +45,123 @@ export const uploadResume = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
+    // Check if we should parse the content from the resume
+    const parseContent = req.body.parseContent === 'true';
+
     // Get file path and details
     const filePath = req.file.path;
     const fileName = req.file.originalname;
     const fileUrl = `/uploads/${path.basename(filePath)}`;
 
-    // Parse resume content - implement this based on file type
-    // For now, we'll just use a simple text extraction or mock it
-    const content = "Full parsed content would go here";
-    const plainText = "Plain text extracted from resume";
+    // Parse resume content from the file
+    const parsedFile = await parseResumeFile(filePath);
+    const { content, plainText } = parsedFile;
 
-    // Extract skills using OpenAI
-    const extractedSkills = await openaiService.extractSkillsFromResume(plainText);
-    const skills = Array.isArray(extractedSkills) ? extractedSkills : 
-                   (extractedSkills && typeof extractedSkills === 'object' ? 
-                     [...(extractedSkills.technicalSkills || []), 
-                      ...(extractedSkills.softSkills || [])] : 
-                     []);
+    let skills: string[] = [];
+    let parsedData: ParsedResumeData = {
+      experience: [],
+      education: [],
+      languages: [],
+      projects: [],
+      contactInfo: {}
+    };
+
+    // Only extract data if parseContent is true
+    if (parseContent) {
+      // Extract skills using OpenAI
+      const extractedSkills = await openaiService.extractSkillsFromResume(plainText);
+      skills = Array.isArray(extractedSkills) ? extractedSkills : 
+                (extractedSkills && typeof extractedSkills === 'object' ? 
+                  [...(extractedSkills.technicalSkills || []), 
+                   ...(extractedSkills.softSkills || [])] : 
+                  []);
+
+      // Extract experience and education using OpenAI
+      // This would be a more complex prompt in a real implementation
+      const parsePrompt = `
+        Parse the following resume text and extract the following information:
+        1. Work experience (company, position, dates, description)
+        2. Education (institution, degree, field of study, dates)
+        3. Languages
+        4. Projects (if any)
+        5. Contact information
+
+        Resume text:
+        ${plainText}
+
+        Return the result as a JSON object with the following structure:
+        {
+          "experience": [
+            {
+              "company": "Company name",
+              "position": "Job title",
+              "startDate": "Start date (MM/YYYY)",
+              "endDate": "End date (MM/YYYY) or 'Present'",
+              "description": "Job description"
+            }
+          ],
+          "education": [
+            {
+              "institution": "University name",
+              "degree": "Degree",
+              "fieldOfStudy": "Field of study",
+              "startDate": "Start date (MM/YYYY)",
+              "endDate": "End date (MM/YYYY)"
+            }
+          ],
+          "languages": ["Language 1", "Language 2"],
+          "projects": [
+            {
+              "name": "Project name",
+              "description": "Project description",
+              "technologies": ["Tech 1", "Tech 2"]
+            }
+          ],
+          "contactInfo": {
+            "email": "email@example.com",
+            "phone": "123-456-7890",
+            "linkedin": "linkedin profile",
+            "github": "github profile",
+            "website": "personal website"
+          }
+        }
+      `;
+
+      try {
+        // In a real implementation, this would use the OpenAI API
+        // const parsedResponse = await openaiService.parseResumeData(plainText);
+        // parsedData = parsedResponse;
+        
+        // For now, we'll just mock some data extraction
+        // Remove this in production and use the real OpenAI parsing
+        if (plainText.includes("experience") || plainText.includes("work")) {
+          parsedData.experience = [{
+            company: "Example Company",
+            position: "Software Developer",
+            startDate: "01/2020",
+            endDate: "Present",
+            description: "Worked on various projects"
+          }];
+        }
+        
+        if (plainText.includes("education") || plainText.includes("university")) {
+          parsedData.education = [{
+            institution: "Example University",
+            degree: "Bachelor's",
+            fieldOfStudy: "Computer Science",
+            startDate: "09/2016",
+            endDate: "06/2020"
+          }];
+        }
+      } catch (parseError) {
+        console.error('Error parsing resume details:', parseError);
+        // Continue with basic data if parsing fails
+      }
+    }
+
+    // Check if this is the user's first resume
+    const resumeCount = await Resume.count({ where: { userId: req.userId } });
+    const isPrimary = resumeCount === 0; // Make it primary if it's the first one
 
     // Create resume record
     const resume = await Resume.create({
@@ -46,8 +171,9 @@ export const uploadResume = async (req: AuthRequest, res: Response) => {
       content,
       plainText,
       skills,
-      experience: [], // Will be filled in later with parsed data
-      education: []   // Will be filled in later with parsed data
+      experience: parsedData.experience || [],
+      education: parsedData.education || [],
+      isPrimary
     });
 
     // Generate embedding for the resume asynchronously (don't wait for it)
@@ -63,6 +189,9 @@ export const uploadResume = async (req: AuthRequest, res: Response) => {
         fileName: resume.fileName,
         fileUrl: resume.fileUrl,
         skills: resume.skills,
+        experience: resume.experience,
+        education: resume.education,
+        isPrimary: resume.isPrimary,
         createdAt: resume.createdAt
       }
     });
@@ -93,6 +222,9 @@ export const getUserResumes = async (req: AuthRequest, res: Response) => {
         fileName: resume.fileName,
         fileUrl: resume.fileUrl,
         skills: resume.skills,
+        experience: resume.experience,
+        education: resume.education,
+        isPrimary: resume.isPrimary,
         createdAt: resume.createdAt
       }))
     });
@@ -124,7 +256,17 @@ export const getResumeById = async (req: AuthRequest, res: Response) => {
 
     res.status(200).json({
       message: 'Resume retrieved successfully',
-      resume
+      resume: {
+        id: resume.id,
+        fileName: resume.fileName,
+        fileUrl: resume.fileUrl,
+        skills: resume.skills,
+        experience: resume.experience,
+        education: resume.education,
+        isPrimary: resume.isPrimary,
+        createdAt: resume.createdAt,
+        updatedAt: resume.updatedAt
+      }
     });
   } catch (error) {
     console.error('Error retrieving resume:', error);
@@ -197,8 +339,23 @@ export const deleteResume = async (req: AuthRequest, res: Response) => {
       fs.unlinkSync(filePath);
     }
 
+    // Check if this was the primary resume
+    const wasPrimary = resume.isPrimary;
+
     // Delete resume from database
     await resume.destroy();
+
+    // If this was the primary resume, set another resume as primary if available
+    if (wasPrimary) {
+      const anotherResume = await Resume.findOne({
+        where: { userId: req.userId },
+        order: [['createdAt', 'DESC']]
+      });
+
+      if (anotherResume) {
+        await anotherResume.update({ isPrimary: true });
+      }
+    }
 
     res.status(200).json({ message: 'Resume deleted successfully' });
   } catch (error) {

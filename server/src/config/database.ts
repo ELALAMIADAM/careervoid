@@ -16,7 +16,7 @@ const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
   host: DB_HOST,
   port: DB_PORT,
   dialect: DB_DIALECT,
-  logging: process.env.NODE_ENV === 'development' ? console.log : false,
+  logging: false, // Disable SQL logging in all environments
   define: {
     timestamps: true, // Adds createdAt and updatedAt timestamps to every model
     underscored: true // Use snake_case for database column names

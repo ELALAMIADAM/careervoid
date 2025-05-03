@@ -13,6 +13,7 @@ interface ResumeAttributes {
   skills: string[];
   experience: ResumeExperience[];
   education: ResumeEducation[];
+  isPrimary: boolean;
   vectorEmbedding?: Buffer; // For vector search
   createdAt?: Date;
   updatedAt?: Date;
@@ -47,6 +48,7 @@ class Resume extends Model<ResumeAttributes, ResumeCreationAttributes> implement
   public skills!: string[];
   public experience!: ResumeExperience[];
   public education!: ResumeEducation[];
+  public isPrimary!: boolean;
   public vectorEmbedding?: Buffer;
 
   // Timestamps
@@ -100,6 +102,11 @@ Resume.init(
       type: DataTypes.JSONB,
       allowNull: false,
       defaultValue: [],
+    },
+    isPrimary: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
     vectorEmbedding: {
       type: DataTypes.BLOB,
