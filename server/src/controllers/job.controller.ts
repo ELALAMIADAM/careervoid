@@ -6,6 +6,7 @@ import { Op } from 'sequelize';
 import openaiService from '../services/openai.service';
 import vectorService from '../services/vector.service';
 import huggingfaceService from '../services/huggingface.service';
+import { jobSearchService } from '../services/jobs/job-search-service';
 
 /**
  * Create a new job listing
@@ -289,5 +290,177 @@ export const analyzeJobDescription = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error analyzing job description:', error);
     res.status(500).json({ message: 'Server error during job description analysis' });
+  }
+};
+
+/**
+ * Search for jobs on external platforms (LinkedIn, etc.)
+ */
+export const searchExternalJobs = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    
+    // Get parameters from request
+    const { 
+      keywords, 
+      location, 
+      timeFilter = 'week', 
+      remote, 
+      jobType, 
+      limit = 20,
+      sources
+    } = req.query;
+    
+    if (!keywords) {
+      return res.status(400).json({ message: 'Keywords are required for job search' });
+    }
+    
+    // Convert sources to array if it's a string
+    const sourcesArray = sources 
+      ? Array.isArray(sources) 
+        ? sources as string[] 
+        : [sources as string]
+      : ['linkedin'];  // Default to LinkedIn
+    
+    // Format parameters for job search
+    const searchParams = {
+      keywords: keywords as string,
+      location: location as string | undefined,
+      timeFilter: (timeFilter as 'day' | 'week' | 'month' | 'any'),
+      remote: remote === 'true',
+      jobType: jobType as 'fulltime' | 'parttime' | 'contract' | 'internship' | undefined,
+      limit: limit ? parseInt(limit as string) : 20
+    };
+    
+    // Search for jobs
+    const results = await jobSearchService.searchJobs(searchParams, sourcesArray);
+    
+    res.status(200).json({
+      message: 'External jobs found',
+      results
+    });
+  } catch (error) {
+    console.error('Error searching external jobs:', error);
+    res.status(500).json({ message: 'Server error while searching for external jobs' });
+  }
+};
+
+/**
+ * Get details of a specific external job
+ */
+export const getExternalJobDetails = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    
+    const { id, source = 'linkedin' } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ message: 'Job ID is required' });
+    }
+    
+    // Get job details
+    const jobDetails = await jobSearchService.getJobDetails(id, source);
+    
+    if (!jobDetails) {
+      return res.status(404).json({ message: 'Job not found' });
+    }
+    
+    res.status(200).json({
+      message: 'Job details found',
+      job: jobDetails
+    });
+  } catch (error) {
+    console.error('Error fetching external job details:', error);
+    res.status(500).json({ message: 'Server error while fetching job details' });
+  }
+};
+
+/**
+ * Search for jobs using a primary resume for keywords
+ */
+export const searchJobsWithResume = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    
+    // Find user's primary resume
+    const primaryResume = await Resume.findOne({
+      where: {
+        userId: req.userId,
+        isPrimary: true
+      }
+    });
+    
+    if (!primaryResume) {
+      return res.status(404).json({ 
+        message: 'No primary resume found',
+        needsResume: true 
+      });
+    }
+    
+    // Get parameters from request
+    const { 
+      location, 
+      timeFilter = 'week', 
+      remote, 
+      jobType, 
+      limit = 20,
+      sources
+    } = req.query;
+    
+    // Generate keywords from resume skills
+    let keywords = '';
+    
+    if (primaryResume.skills && primaryResume.skills.length > 0) {
+      // Use the top 5 skills as keywords
+      keywords = primaryResume.skills.slice(0, 5).join(' ');
+    }
+    
+    // If no skills are found, use the job title
+    if (!keywords && primaryResume.title) {
+      keywords = primaryResume.title;
+    }
+    
+    // If still no keywords, return an error
+    if (!keywords) {
+      return res.status(400).json({ 
+        message: 'Resume does not have enough information to search for jobs',
+        needsResumeUpdate: true
+      });
+    }
+    
+    // Convert sources to array if it's a string
+    const sourcesArray = sources 
+      ? Array.isArray(sources) 
+        ? sources as string[] 
+        : [sources as string]
+      : ['linkedin'];  // Default to LinkedIn
+    
+    // Format parameters for job search
+    const searchParams = {
+      keywords,
+      location: location as string | undefined,
+      timeFilter: (timeFilter as 'day' | 'week' | 'month' | 'any'),
+      remote: remote === 'true',
+      jobType: jobType as 'fulltime' | 'parttime' | 'contract' | 'internship' | undefined,
+      limit: limit ? parseInt(limit as string) : 20
+    };
+    
+    // Search for jobs
+    const results = await jobSearchService.searchJobs(searchParams, sourcesArray);
+    
+    res.status(200).json({
+      message: 'Jobs based on resume found',
+      results,
+      keywordsUsed: keywords
+    });
+  } catch (error) {
+    console.error('Error searching jobs with resume:', error);
+    res.status(500).json({ message: 'Server error while searching for jobs' });
   }
 }; 

@@ -8,7 +8,10 @@ import {
   deleteJob,
   searchJobs,
   getMatchingJobsForUser,
-  analyzeJobDescription
+  analyzeJobDescription,
+  searchExternalJobs,
+  getExternalJobDetails,
+  searchJobsWithResume
 } from '../controllers/job.controller';
 
 const router = express.Router();
@@ -35,5 +38,10 @@ router.get('/matches/user', getMatchingJobsForUser);
 
 // Analyze job description
 router.post('/analyze', analyzeJobDescription);
+
+// External job search routes
+router.get('/external/search', searchExternalJobs);
+router.get('/external/:source/:id', getExternalJobDetails);
+router.get('/resume-based/search', searchJobsWithResume);
 
 export const jobRoutes = router; 
