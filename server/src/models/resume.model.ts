@@ -14,6 +14,10 @@ interface ResumeAttributes {
   skills: string[];
   experience: ResumeExperience[];
   education: ResumeEducation[];
+  languages?: string[];
+  projects?: ResumeProject[];
+  about?: string;
+  contactInfo?: ContactInfo;
   isPrimary: boolean;
   vectorEmbedding?: Buffer; // For vector search
   createdAt?: Date;
@@ -36,6 +40,24 @@ interface ResumeEducation {
   endDate?: string;
 }
 
+interface ResumeProject {
+  name: string;
+  description: string;
+  technologies: string[];
+  url?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+interface ContactInfo {
+  email: string;
+  phone?: string;
+  linkedin?: string;
+  github?: string;
+  website?: string;
+  address?: string;
+}
+
 // For creating a new Resume, id and timestamps are optional
 interface ResumeCreationAttributes extends Optional<ResumeAttributes, 'id' | 'createdAt' | 'updatedAt'> {}
 
@@ -50,6 +72,10 @@ class Resume extends Model<ResumeAttributes, ResumeCreationAttributes> implement
   public skills!: string[];
   public experience!: ResumeExperience[];
   public education!: ResumeEducation[];
+  public languages?: string[];
+  public projects?: ResumeProject[];
+  public about?: string;
+  public contactInfo?: ContactInfo;
   public isPrimary!: boolean;
   public vectorEmbedding?: Buffer;
 
@@ -110,6 +136,25 @@ Resume.init(
       allowNull: false,
       defaultValue: [],
     },
+    languages: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      allowNull: true,
+      defaultValue: [],
+    },
+    projects: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
+    },
+    about: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    contactInfo: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: {},
+    },
     isPrimary: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
@@ -142,4 +187,4 @@ Resume.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 User.hasMany(Resume, { foreignKey: 'userId', as: 'resumes' });
 
 export { Resume };
-export type { ResumeExperience, ResumeEducation }; 
+export type { ResumeExperience, ResumeEducation, ResumeProject, ContactInfo }; 

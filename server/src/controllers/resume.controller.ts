@@ -231,6 +231,10 @@ export const getUserResumes = async (req: AuthRequest, res: Response) => {
         skills: resume.skills,
         experience: resume.experience,
         education: resume.education,
+        languages: resume.languages || [],
+        projects: resume.projects || [],
+        about: resume.about || '',
+        contactInfo: resume.contactInfo || {},
         isPrimary: resume.isPrimary,
         createdAt: resume.createdAt
       }))
@@ -271,6 +275,10 @@ export const getResumeById = async (req: AuthRequest, res: Response) => {
         skills: resume.skills,
         experience: resume.experience,
         education: resume.education,
+        languages: resume.languages || [],
+        projects: resume.projects || [],
+        about: resume.about || '',
+        contactInfo: resume.contactInfo || {},
         isPrimary: resume.isPrimary,
         createdAt: resume.createdAt,
         updatedAt: resume.updatedAt
@@ -470,6 +478,22 @@ export const updateResume = async (req: AuthRequest, res: Response) => {
       });
       plainText += '\n';
     }
+    
+    if (languages && languages.length > 0) {
+      plainText += `Languages: ${languages.join(', ')}\n\n`;
+    }
+    
+    if (projects && projects.length > 0) {
+      plainText += `Projects:\n`;
+      projects.forEach((proj: any) => {
+        plainText += `- ${proj.name}`;
+        if (proj.technologies && proj.technologies.length > 0) {
+          plainText += ` (${proj.technologies.join(', ')})`;
+        }
+        plainText += `\n  ${proj.description}\n`;
+      });
+      plainText += '\n';
+    }
 
     // Update the resume
     await resume.update({
@@ -478,7 +502,11 @@ export const updateResume = async (req: AuthRequest, res: Response) => {
       plainText,
       skills: skills || resume.skills,
       experience: experience || resume.experience,
-      education: education || resume.education
+      education: education || resume.education,
+      languages: languages || resume.languages,
+      projects: projects || resume.projects,
+      about: about || resume.about,
+      contactInfo: contactInfo || resume.contactInfo
     });
 
     // If the vector embedding was already generated, regenerate it
@@ -497,6 +525,10 @@ export const updateResume = async (req: AuthRequest, res: Response) => {
         skills: resume.skills,
         experience: resume.experience,
         education: resume.education,
+        languages: resume.languages || [],
+        projects: resume.projects || [],
+        about: resume.about || '',
+        contactInfo: resume.contactInfo || {},
         isPrimary: resume.isPrimary,
         createdAt: resume.createdAt,
         updatedAt: resume.updatedAt
